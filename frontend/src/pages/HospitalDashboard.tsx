@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { Bed, Wind, Droplets, Stethoscope, Users, Edit2, Check, X, RefreshCw, Clock } from 'lucide-react';
+import { Bed, Wind, Droplets, Stethoscope, Users, Edit2, Check, X, RefreshCw, Clock, Ambulance, AlertTriangle } from 'lucide-react';
 import clsx from 'clsx';
+import { useQuery } from '@tanstack/react-query';
+import { getTripsForHospital, getHospitals } from '../api/client';
 
 type StatusType = 'AVAILABLE' | 'BUSY' | 'FULL';
 
@@ -9,6 +11,26 @@ export default function HospitalDashboard() {
   const [selectedStatus, setSelectedStatus] = useState<StatusType>('AVAILABLE');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [lastUpdated, setLastUpdated] = useState('2 min ago');
+
+  const storedUser = localStorage.getItem('user');
+  const currentUser = storedUser ? JSON.parse(storedUser) : { hospital: 'H-001' };
+
+  // Fetch hospitals to find ID
+  const { data: hospitals } = useQuery({
+    queryKey: ['hospitals'],
+    queryFn: () => getHospitals(),
+  });
+
+  const myHospital = hospitals?.find((h: any) => 
+    h.id === currentUser.hospital || h.name.includes(currentUser.hospital)
+  );
+
+  const { data: incomingTrips } = useQuery({
+    queryKey: ['hospital-trips', myHospital?.id],
+    queryFn: () => getTripsForHospital(myHospital?.id as string),
+    enabled: !!myHospital?.id,
+    refetchInterval: 10000
+  });
 
   // Resource overview top cards
   const overviewCards = [
@@ -351,6 +373,67 @@ export default function HospitalDashboard() {
           </div>
         </div>
 
+      </div>
+
+      {/* Incoming Requests Section */}
+      <div className="bg-white dark:bg-slate-850 rounded-2xl border border-gray-200 dark:border-slate-800 overflow-hidden shadow-xs space-y-4">
+        <div className="p-5 border-b border-gray-200 dark:border-slate-800">
+          <h4 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            Incoming Emergency Requests
+            {(incomingTrips?.length || 0) > 0 && (
+              <span className="bg-red-100 text-red-600 text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse">
+                {incomingTrips?.length} Active
+              </span>
+            )}
+          </h4>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Ambulances currently en route to your facility.</p>
+        </div>
+
+        <div className="p-5">
+          {(!incomingTrips || incomingTrips.length === 0) ? (
+            <div className="text-center py-8">
+              <AlertTriangle className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">No incoming emergency requests at the moment.</p>
+            </div>
+          ) : (
+            <div className="grid gap-4">
+              {incomingTrips.map((trip: any) => (
+                <div key={trip.id} className="border border-red-100 dark:border-red-900/30 rounded-xl p-4 flex flex-col sm:flex-row justify-between sm:items-center gap-4 bg-red-50/30 dark:bg-red-900/10 relative overflow-hidden">
+                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-red-500"></div>
+                  
+                  <div className="flex items-start sm:items-center gap-4 pl-2">
+                    <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center text-red-600 flex-shrink-0">
+                      <Ambulance className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-bold text-slate-900 dark:text-white text-sm">{trip.emergency?.requestCode}</span>
+                        <span className="text-[10px] font-bold bg-red-500 text-white px-2 py-0.5 rounded uppercase">{trip.emergency?.priority}</span>
+                        <span className="text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 px-2 py-0.5 rounded uppercase">{trip.status}</span>
+                      </div>
+                      <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                        {trip.emergency?.type} • Patient: {trip.emergency?.patientName || 'Unknown'} ({trip.emergency?.patientAge || '--'} y/o)
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-6 pl-2 sm:pl-0 border-t border-slate-100 dark:border-slate-800 sm:border-t-0 pt-3 sm:pt-0">
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Ambulance</p>
+                      <p className="text-sm font-bold text-slate-900 dark:text-white">{trip.ambulance?.vehicleNo || 'Unknown'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Time Assigned</p>
+                      <p className="text-sm font-mono text-slate-600 dark:text-slate-400">
+                        {new Date(trip.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Recent Resource Updates Section */}

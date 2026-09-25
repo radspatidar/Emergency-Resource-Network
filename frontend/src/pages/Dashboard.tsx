@@ -1,9 +1,10 @@
 import React from 'react';
 import { Building2, Ambulance, CheckCircle2, RefreshCw, AlertTriangle, Clock, MapPin } from 'lucide-react';
 import clsx from 'clsx';
+import { useQuery } from '@tanstack/react-query';
+import { getHospitals, getAmbulances, getEmergencies } from '../api/client';
 import HospitalDashboard from './HospitalDashboard';
 import CoordinatorDashboard from './CoordinatorDashboard';
-
 import OperatorDashboard from './OperatorDashboard';
 
 export default function Dashboard() {
@@ -22,29 +23,50 @@ export default function Dashboard() {
     return <OperatorDashboard />;
   }
 
+  const { data: rawHospitals = [] } = useQuery({ queryKey: ['hospitals'], queryFn: () => getHospitals(), refetchInterval: 5000 });
+  const { data: rawAmbulances = [] } = useQuery({ queryKey: ['ambulances'], queryFn: () => getAmbulances(), refetchInterval: 5000 });
+  const { data: rawEmergencies = [] } = useQuery({ queryKey: ['emergencies'], queryFn: () => getEmergencies(), refetchInterval: 5000 });
+
+  const availableHospitals = rawHospitals.filter((h: any) => h.emergencyStatus === 'AVAILABLE').length;
+  const outOfServiceAmbulances = rawAmbulances.filter((a: any) => a.status === 'OUT OF SERVICE').length;
+  const availableAmbulances = rawAmbulances.filter((a: any) => a.status === 'AVAILABLE').length;
+  const busyAmbulances = rawAmbulances.filter((a: any) => a.status === 'BUSY' || a.status === 'IN PROGRESS').length;
+  const activeEmergencies = rawEmergencies.filter((e: any) => e.status !== 'COMPLETED').length;
+  const pendingRequests = rawEmergencies.filter((e: any) => e.status === 'PENDING').length;
+  const assignedRequests = rawEmergencies.filter((e: any) => e.status === 'ASSIGNED' || e.status === 'ACCEPTED').length;
+
   const kpis = [
-    { title: 'Total Hospitals', value: '5', sub: '4 available', icon: Building2, color: 'bg-brand-600', trend: 'up' },
-    { title: 'Total Ambulances', value: '8', sub: '1 out of service', icon: Ambulance, color: 'bg-slate-700', trend: 'up' },
-    { title: 'Available Ambulances', value: '4', sub: 'Ready for dispatch', icon: CheckCircle2, color: 'bg-status-success', trend: 'up' },
-    { title: 'Busy Ambulances', value: '3', sub: 'Currently assigned', icon: RefreshCw, color: 'bg-status-warning', trend: 'down' },
-    { title: 'Active Emergencies', value: '6', sub: 'Requires attention', icon: AlertTriangle, color: 'bg-status-critical', trend: 'up' },
-    { title: 'Pending Requests', value: '2', sub: 'Awaiting assignment', icon: Clock, color: 'bg-orange-500', trend: 'up' },
-    { title: 'Assigned Requests', value: '2', sub: 'Ambulance en route', icon: MapPin, color: 'bg-teal-500', trend: 'down' },
+    { title: 'Total Hospitals', value: String(rawHospitals.length), sub: `${availableHospitals} available`, icon: Building2, color: 'bg-brand-600', trend: 'up' },
+    { title: 'Total Ambulances', value: String(rawAmbulances.length), sub: `${outOfServiceAmbulances} out of service`, icon: Ambulance, color: 'bg-slate-700', trend: 'up' },
+    { title: 'Available Ambulances', value: String(availableAmbulances), sub: 'Ready for dispatch', icon: CheckCircle2, color: 'bg-status-success', trend: 'up' },
+    { title: 'Busy Ambulances', value: String(busyAmbulances), sub: 'Currently assigned', icon: RefreshCw, color: 'bg-status-warning', trend: 'down' },
+    { title: 'Active Emergencies', value: String(activeEmergencies), sub: 'Requires attention', icon: AlertTriangle, color: 'bg-status-critical', trend: 'up' },
+    { title: 'Pending Requests', value: String(pendingRequests), sub: 'Awaiting assignment', icon: Clock, color: 'bg-orange-500', trend: 'up' },
+    { title: 'Assigned Requests', value: String(assignedRequests), sub: 'Ambulance en route', icon: MapPin, color: 'bg-teal-500', trend: 'down' },
   ];
 
-  const hospitals = [
-    { id: 'HOS-001', name: 'City Care Hospital', location: 'Indore', status: 'Available', beds: 42, icu: 8, updated: '09:00' },
-    { id: 'HOS-002', name: 'Central Emergency Hospital', location: 'Indore', status: 'Busy', beds: 12, icu: 2, updated: '09:30' },
-    { id: 'HOS-003', name: 'Memorial General Hospital', location: 'Indore', status: 'Available', beds: 67, icu: 14, updated: '08:45' },
-    { id: 'HOS-004', name: 'Lifeline Trauma Center', location: 'Indore', status: 'Full', beds: 0, icu: 0, updated: '09:15' },
-    { id: 'HOS-005', name: 'Apollo Specialty Hospital', location: 'Indore', status: 'Available', beds: 28, icu: 6, updated: '07:30' },
-  ];
+  const hospitals = rawHospitals.slice(0, 5).map((h: any) => ({
+    id: h.id,
+    name: h.name,
+    location: h.city,
+    status: h.emergencyStatus.charAt(0) + h.emergencyStatus.slice(1).toLowerCase(),
+    beds: h.availableBeds,
+    icu: h.availableIcu,
+    updated: new Date(h.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  }));
 
-  const alerts = [
-    { id: 1, type: 'CRITICAL', msg: 'Multiple emergency requests are currently Pending without ambulance assignment.', time: '11:02 AM' },
-    { id: 2, type: 'WARNING', msg: 'Lifeline Trauma Center ICU availability is critically low (0 beds remaining).', time: '10:50 AM' },
-    { id: 3, type: 'WARNING', msg: 'Central Emergency Hospital available beds dropped below threshold (12 remaining).', time: '10:45 AM' },
-  ];
+  const alerts = [];
+  if (pendingRequests > 0) {
+    alerts.push({ id: 1, type: 'CRITICAL', msg: `${pendingRequests} emergency requests are currently Pending without ambulance assignment.`, time: 'Live' });
+  }
+  rawHospitals.forEach((h: any) => {
+    if (h.availableIcu === 0) {
+      alerts.push({ id: `h-${h.id}-icu`, type: 'WARNING', msg: `${h.name} ICU availability is critically low (0 beds remaining).`, time: 'Live' });
+    }
+    if (h.availableBeds < 5 && h.availableBeds > 0) {
+      alerts.push({ id: `h-${h.id}-bed`, type: 'WARNING', msg: `${h.name} available beds dropped below threshold (${h.availableBeds} remaining).`, time: 'Live' });
+    }
+  });
 
   return (
     <div className="space-y-6">
@@ -81,7 +103,7 @@ export default function Dashboard() {
           <div className="p-4 border-b border-gray-200 dark:border-slate-800 flex justify-between items-center">
             <div>
               <h3 className="text-sm font-bold text-gray-900 dark:text-white">Hospital Network</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400">5 registered facilities</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{rawHospitals.length} registered facilities</p>
             </div>
             <a href="/hospitals" className="text-xs font-medium text-brand-600 dark:text-brand-400 hover:underline">View All →</a>
           </div>

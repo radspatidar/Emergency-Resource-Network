@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Check, AlertTriangle } from 'lucide-react';
 import clsx from 'clsx';
 
+import { createEmergency } from '../api/client';
+
 export default function CreateEmergency() {
   const navigate = useNavigate();
 
@@ -18,13 +20,30 @@ export default function CreateEmergency() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
+    try {
+      const resources = [];
+      if (reqIcu) resources.push('ICU');
+      if (reqVent) resources.push('Ventilator');
+      if (reqDoctor) resources.push('Emergency Doctor');
+      
+      await createEmergency({
+        patientId,
+        emergencyType,
+        location,
+        priority,
+        requiredResources: resources,
+        notes: treatment
+      });
       navigate('/emergency-requests');
-    }, 600);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to create emergency request');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const getResourcesText = () => {

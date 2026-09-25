@@ -2,9 +2,17 @@ import React from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { AlertCircle, Plus, ArrowRight, Ambulance, Building2, ChevronRight, Activity, Clock } from 'lucide-react';
 import clsx from 'clsx';
+import { useQuery } from '@tanstack/react-query';
+import { getEmergencies } from '../api/client';
 
 export default function CoordinatorDashboard() {
   const navigate = useNavigate();
+
+  const { data: emergenciesData = [], isLoading } = useQuery({
+    queryKey: ['emergencies'],
+    queryFn: () => getEmergencies(),
+    refetchInterval: 5000,
+  });
 
   const metrics = [
     { label: 'ACTIVE', value: '7', color: 'text-gray-900 dark:text-white', border: 'border-gray-200 dark:border-slate-800' },
@@ -17,15 +25,20 @@ export default function CoordinatorDashboard() {
     { label: 'AMBULANCES AVAIL.', value: '7', color: 'text-emerald-600 dark:text-emerald-400', border: 'border-emerald-200 dark:border-emerald-900/40' },
   ];
 
-  const activeRequests = [
-    { id: 'ER-1025', type: 'Road Accident', priority: 'CRITICAL', location: 'Indore', resources: ['ICU', 'VENT', 'DR'], hospital: '—', amb: '—', status: 'PENDING', time: '18:42' },
-    { id: 'ER-1024', type: 'Cardiac Emergency', priority: 'HIGH', location: 'Bhopal', resources: ['ICU', 'DR'], hospital: 'City Care', amb: 'A-003', status: 'IN PROGRESS', time: '18:36' },
-    { id: 'ER-1023', type: 'Respiratory Emergency', priority: 'HIGH', location: 'Indore', resources: ['VENT', 'DR'], hospital: 'Metro General', amb: 'A-007', status: 'ASSIGNED', time: '18:28' },
-    { id: 'ER-1022', type: 'Trauma', priority: 'CRITICAL', location: 'Ujjain', resources: ['ICU', 'VENT', 'DR'], hospital: 'Apollo Emerg...', amb: 'A-002', status: 'IN PROGRESS', time: '18:10' },
-    { id: 'ER-1021', type: 'Stroke', priority: 'CRITICAL', location: 'Jabalpur', resources: ['ICU', 'DR'], hospital: '—', amb: '—', status: 'PENDING', time: '18:05' },
-    { id: 'ER-1020', type: 'Cardiac Emergency', priority: 'MEDIUM', location: 'Gwalior', resources: ['ICU', 'DR'], hospital: 'Cityline Medi...', amb: 'A-011', status: 'ASSIGNED', time: '09:52' },
-    { id: 'ER-1018', type: 'Burns', priority: 'HIGH', location: 'Bhopal', resources: ['ICU', 'DR'], hospital: '—', amb: '—', status: 'PENDING', time: '09:44' },
-  ];
+  const activeRequests = emergenciesData.map((req: any) => ({
+    id: req.requestCode,
+    type: req.emergencyType,
+    priority: req.priority.toUpperCase(),
+    location: req.location,
+    resources: req.requiredResources || [],
+    hospital: req.hospital?.name || req.hospitalId || '—',
+    amb: req.trip?.ambulance?.vehicleNo || req.ambulance?.vehicleNo || req.ambulanceId || '—',
+    status: req.status.toUpperCase(),
+    time: new Date(req.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+  })).slice(0, 10); // Show top 10
+
+  const pendingRequests = activeRequests.filter((r: any) => r.status === 'PENDING');
+  const criticalPending = pendingRequests.filter((r: any) => r.priority === 'CRITICAL').length;
 
   return (
     <div className="space-y-6 pb-12">
@@ -45,18 +58,20 @@ export default function CoordinatorDashboard() {
       </div>
 
       {/* Critical Alert Banner */}
-      <div className="p-4 rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50/70 dark:bg-red-950/20 text-red-700 dark:text-red-400 flex items-center justify-between shadow-xs">
-        <div className="flex items-center gap-2.5 text-xs sm:text-sm font-semibold">
-          <span className="w-4 h-4 rounded-full bg-red-600 text-white flex items-center justify-center text-[10px] font-bold">!</span>
-          <span>2 critical emergencies pending assignment — immediate coordination required.</span>
+      {criticalPending > 0 && (
+        <div className="p-4 rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50/70 dark:bg-red-950/20 text-red-700 dark:text-red-400 flex items-center justify-between shadow-xs">
+          <div className="flex items-center gap-2.5 text-xs sm:text-sm font-semibold">
+            <span className="w-4 h-4 rounded-full bg-red-600 text-white flex items-center justify-center text-[10px] font-bold">!</span>
+            <span>{criticalPending} critical emergencies pending assignment — immediate coordination required.</span>
+          </div>
+          <button 
+            onClick={() => navigate('/emergency-requests')}
+            className="px-3 py-1 bg-white dark:bg-slate-800 border border-red-200 dark:border-red-900/50 rounded-lg text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-slate-700 transition-colors shadow-2xs whitespace-nowrap"
+          >
+            View All
+          </button>
         </div>
-        <button 
-          onClick={() => navigate('/emergency-requests')}
-          className="px-3 py-1 bg-white dark:bg-slate-800 border border-red-200 dark:border-red-900/50 rounded-lg text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-slate-700 transition-colors shadow-2xs whitespace-nowrap"
-        >
-          View All
-        </button>
-      </div>
+      )}
 
       {/* Priority Summary Metrics Bar (8 Cards) */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
@@ -76,7 +91,7 @@ export default function CoordinatorDashboard() {
           <div className="p-4 border-b border-gray-200 dark:border-slate-800 flex justify-between items-center">
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-bold text-gray-900 dark:text-white">Active Emergency Requests</h3>
-              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300">7</span>
+              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300">{activeRequests.length}</span>
             </div>
             <Link to="/emergency-requests" className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1">
               View all <ArrowRight className="w-3.5 h-3.5" />
@@ -184,58 +199,29 @@ export default function CoordinatorDashboard() {
                 <h4 className="text-sm font-bold text-gray-900 dark:text-white">Needs Action</h4>
               </div>
               <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400">
-                2 pending
+                {pendingRequests.length} pending
               </span>
             </div>
 
             <div className="space-y-2.5">
-              {/* Needs Action Item 1 */}
-              <div className="p-3 rounded-xl border border-red-100 dark:border-red-900/30 bg-red-50/30 dark:bg-red-950/10 flex items-center justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-red-600 dark:text-red-400">ER-1025</span>
-                    <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-gray-200 dark:bg-slate-800 text-gray-600">PENDING</span>
+              {pendingRequests.slice(0, 3).map((req: any) => (
+                <div key={req.id} className="p-3 rounded-xl border border-red-100 dark:border-red-900/30 bg-red-50/30 dark:bg-red-950/10 flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-red-600 dark:text-red-400">{req.id}</span>
+                      <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-gray-200 dark:bg-slate-800 text-gray-600">PENDING</span>
+                    </div>
+                    <p className="text-xs font-semibold text-gray-800 dark:text-gray-200 mt-1">{req.type}</p>
+                    <p className="text-[10px] text-gray-400">{req.location}</p>
                   </div>
-                  <p className="text-xs font-semibold text-gray-800 dark:text-gray-200 mt-1">Road Accident</p>
-                  <p className="text-[10px] text-gray-400">Indore</p>
+                  <button 
+                    onClick={() => navigate('/emergency-requests')}
+                    className="px-3 py-1 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 hover:bg-red-200 text-xs font-bold rounded-lg transition-colors"
+                  >
+                    Assign
+                  </button>
                 </div>
-                <button 
-                  onClick={() => navigate('/emergency-requests')}
-                  className="px-3 py-1 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 hover:bg-red-200 text-xs font-bold rounded-lg transition-colors"
-                >
-                  Assign
-                </button>
-              </div>
-
-              {/* Needs Action Item 2 */}
-              <div className="p-3 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50/50 dark:bg-slate-900/30 flex items-center justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-blue-600 dark:text-blue-400">ER-1022</span>
-                    <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-teal-100 dark:bg-teal-950/40 text-teal-600">IN PROGRESS</span>
-                  </div>
-                  <p className="text-xs font-semibold text-gray-800 dark:text-gray-200 mt-1">Trauma</p>
-                  <p className="text-[10px] text-gray-400">Ujjain</p>
-                </div>
-              </div>
-
-              {/* Needs Action Item 3 */}
-              <div className="p-3 rounded-xl border border-red-100 dark:border-red-900/30 bg-red-50/30 dark:bg-red-950/10 flex items-center justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-red-600 dark:text-red-400">ER-1021</span>
-                    <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-gray-200 dark:bg-slate-800 text-gray-600">PENDING</span>
-                  </div>
-                  <p className="text-xs font-semibold text-gray-800 dark:text-gray-200 mt-1">Stroke</p>
-                  <p className="text-[10px] text-gray-400">Jabalpur</p>
-                </div>
-                <button 
-                  onClick={() => navigate('/emergency-requests')}
-                  className="px-3 py-1 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 hover:bg-red-200 text-xs font-bold rounded-lg transition-colors"
-                >
-                  Assign
-                </button>
-              </div>
+              ))}
             </div>
           </div>
 

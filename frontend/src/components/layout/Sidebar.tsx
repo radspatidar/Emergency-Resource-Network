@@ -38,7 +38,7 @@ export function Sidebar() {
   };
 
   const systemAdminNav = [
-    { name: 'Dashboard', path: '/', icon: LayoutDashboard },
+    { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
     { name: 'Users', path: '/users', icon: Users },
     { name: 'Hospitals', path: '/hospitals', icon: Building2 },
     { name: 'Ambulances', path: '/ambulances', icon: Ambulance },
@@ -48,7 +48,7 @@ export function Sidebar() {
   ];
 
   const hospitalAdminNav = [
-    { name: 'Dashboard', path: '/', icon: LayoutDashboard },
+    { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
     { name: 'Resources', path: '/resources', icon: Database },
     { name: 'Emergency Status', path: '/emergency-status', icon: AlertTriangle },
     { name: 'Activity', path: '/activity', icon: Activity },
@@ -57,7 +57,7 @@ export function Sidebar() {
   ];
 
   const coordinatorNav = [
-    { name: 'Dashboard', path: '/', icon: LayoutDashboard },
+    { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
     { name: 'Emergency Requests', path: '/emergency-requests', icon: AlertTriangle, badge: 5 },
     { name: 'Resource Matching', path: '/resource-matching', icon: Search },
     { name: 'Assignments', path: '/assignments', icon: FileCheck },

@@ -1,19 +1,99 @@
-import React from 'react';
-import { Navigation2, MapPin, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Navigation2, MapPin, RefreshCw, AlertTriangle } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getAmbulances, getTripForAmbulance, updateTripLocation } from '../api/client';
 
 export default function Location() {
+  const [position, setPosition] = useState<{lat: number, lng: number} | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [watchId, setWatchId] = useState<number | null>(null);
+
+  const queryClient = useQueryClient();
+  const storedUser = localStorage.getItem('user');
+  const currentUser = storedUser ? JSON.parse(storedUser) : { ambulance: 'A-001', name: 'Operator' };
+
+  // Fetch ambulances to find ID
+  const { data: ambulances } = useQuery({
+    queryKey: ['ambulances'],
+    queryFn: () => getAmbulances(),
+  });
+
+  const myAmbulance = ambulances?.find((a: any) => 
+    a.vehicleNo?.replace('-', '') === currentUser.ambulance?.replace('-', '') || a.id === currentUser.ambulance
+  ) || ambulances?.find((a: any) => a.status === 'Busy') || ambulances?.[0];
+
+  // Fetch trip
+  const { data: trip } = useQuery({
+    queryKey: ['active-trip', myAmbulance?.id],
+    queryFn: () => getTripForAmbulance(myAmbulance?.id as string),
+    enabled: !!myAmbulance?.id,
+    refetchInterval: 10000
+  });
+
+  const updateLocationMutation = useMutation({
+    mutationFn: (data: {lat: number, lng: number}) => 
+      updateTripLocation(trip?.id, { ...data, waypointIndex: 0 })
+  });
+
+  useEffect(() => {
+    if (!navigator.geolocation) {
+      setError('Geolocation is not supported by your browser');
+      return;
+    }
+
+    const id = navigator.geolocation.watchPosition(
+      (pos) => {
+        const newPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setPosition(newPos);
+        setLastUpdated(new Date());
+        setError(null);
+
+        // If we have an active trip, update backend
+        if (trip && trip.status === 'In Progress') {
+          updateLocationMutation.mutate(newPos);
+        }
+      },
+      (err) => {
+        setError(err.message);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      }
+    );
+
+    setWatchId(id);
+
+    return () => {
+      if (id !== null) {
+        navigator.geolocation.clearWatch(id);
+      }
+    };
+  }, [trip?.status, trip?.id]);
+
+  const destLat = trip?.hospital ? 22.7265 : null;
+  const destLng = trip?.hospital ? 75.8650 : null;
+
   return (
     <div className="max-w-6xl mx-auto pb-12 pt-2">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-1">Location</h1>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-1">Live Location</h1>
       </div>
 
       <div className="mb-6">
-        <h2 className="text-lg font-bold text-slate-900 dark:text-white">Simulated Location</h2>
-        <p className="text-sm font-medium text-orange-600 dark:text-orange-500 mt-1 flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
-          This is a simulated location system. Not real GPS tracking.
-        </p>
+        {error ? (
+          <div className="flex items-center gap-2 text-red-600 bg-red-50 dark:bg-red-900/20 p-3 rounded-lg border border-red-200 dark:border-red-900/50">
+            <AlertTriangle className="w-5 h-5" />
+            <p className="text-sm font-medium">GPS Error: {error}</p>
+          </div>
+        ) : (
+          <p className="text-sm font-medium text-emerald-600 dark:text-emerald-500 mt-1 flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            Real-time GPS tracking active
+          </p>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -30,127 +110,97 @@ export default function Location() {
             <div className="space-y-6 flex-1">
               <div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Latitude</p>
-                <p className="text-3xl font-mono font-bold text-slate-900 dark:text-white leading-none">22.7196</p>
+                <p className="text-3xl font-mono font-bold text-slate-900 dark:text-white leading-none">
+                  {position ? position.lat.toFixed(6) : '--.------'}
+                </p>
               </div>
               <div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Longitude</p>
-                <p className="text-3xl font-mono font-bold text-slate-900 dark:text-white leading-none">75.8577</p>
+                <p className="text-3xl font-mono font-bold text-slate-900 dark:text-white leading-none">
+                  {position ? position.lng.toFixed(6) : '--.------'}
+                </p>
               </div>
               <div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Last Updated</p>
-                <p className="text-sm font-mono text-slate-600 dark:text-slate-400 font-medium">03:52:28 pm</p>
+                <p className="text-sm font-mono text-slate-600 dark:text-slate-400 font-medium">
+                  {lastUpdated ? lastUpdated.toLocaleTimeString() : 'Waiting for signal...'}
+                </p>
               </div>
               <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Waypoint</p>
-                <p className="text-sm font-medium text-slate-900 dark:text-white">Start Point</p>
-              </div>
-              <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Progress</p>
-                <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full mt-2 mb-2">
-                  <div className="h-full bg-blue-500 rounded-full" style={{ width: '25%' }}></div>
-                </div>
-                <p className="text-xs text-slate-500 font-medium">Stop 1 of 4</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Status</p>
+                <p className="text-sm font-medium text-slate-900 dark:text-white">
+                  {trip ? (trip.status === 'In Progress' ? 'En Route to Destination' : trip.status) : 'Standby'}
+                </p>
               </div>
             </div>
-
-            <button disabled className="mt-8 w-full bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500 font-bold py-3 rounded-xl flex items-center justify-center gap-2 cursor-not-allowed transition-colors">
-              <RefreshCw className="w-4 h-4" />
-              Start trip to update location
-            </button>
           </div>
         </div>
 
         {/* Right Col */}
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white dark:bg-slate-900 rounded-xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm">
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4">Route Visualization</h3>
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4">Location Visualization</h3>
             
             <div className="relative w-full h-[400px] bg-slate-800 dark:bg-[#0f172a] rounded-xl overflow-hidden border border-slate-700 flex items-center justify-center p-8 mb-6">
-              {/* Simulated Grid Background */}
+              {/* Grid Background */}
               <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'linear-gradient(#334155 1px, transparent 1px), linear-gradient(90deg, #334155 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
               
               {/* Badge */}
-              <div className="absolute top-4 left-4 bg-orange-500 text-white text-[10px] font-bold px-3 py-1.5 rounded uppercase tracking-wider flex items-center gap-1.5 z-10">
-                <span className="w-1.5 h-1.5 bg-white rounded-full"></span>
-                SIMULATED MOVEMENT
+              <div className="absolute top-4 left-4 bg-emerald-500 text-white text-[10px] font-bold px-3 py-1.5 rounded uppercase tracking-wider flex items-center gap-1.5 z-10">
+                <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
+                LIVE GPS
               </div>
               
-              {/* Route SVG */}
-              <svg className="absolute inset-0 w-full h-full" style={{ filter: 'drop-shadow(0 0 8px rgba(59,130,246,0.3))' }}>
-                <polyline 
-                  points="20%,80% 40%,60% 60%,70% 85%,30%" 
-                  fill="none" 
-                  stroke="#3b82f6" 
-                  strokeWidth="3" 
-                  strokeDasharray="8 6" 
-                  className="opacity-60"
-                />
-                <circle cx="40%" cy="60%" r="6" fill="#475569" stroke="#1e293b" strokeWidth="2" />
-                <circle cx="60%" cy="70%" r="6" fill="#475569" stroke="#1e293b" strokeWidth="2" />
-              </svg>
-
-              {/* Start Marker */}
-              <div className="absolute left-[20%] top-[80%] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
-                <div className="text-[10px] text-slate-400 font-mono mb-1 text-center leading-tight">22.7196<br/>75.8577</div>
-                <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center mb-1">
-                  <div className="w-5 h-5 rounded-full bg-blue-500 border-2 border-white shadow-lg"></div>
+              {/* Marker - Center it dynamically based on position */}
+              {position && (
+                <div className="absolute left-[50%] top-[50%] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
+                  <div className="text-[10px] text-slate-400 font-mono mb-1 text-center leading-tight">
+                    {position.lat.toFixed(4)}<br/>{position.lng.toFixed(4)}
+                  </div>
+                  <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center mb-1">
+                    <div className="w-5 h-5 rounded-full bg-emerald-500 border-2 border-white shadow-lg"></div>
+                  </div>
+                  <span className="text-[10px] font-bold text-white tracking-wider">CURRENT</span>
                 </div>
-                <span className="text-[10px] font-bold text-white tracking-wider">START</span>
-              </div>
+              )}
 
-              {/* Dest Marker */}
-              <div className="absolute left-[85%] top-[30%] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
-                <div className="text-[10px] text-slate-400 font-mono mb-1 text-center leading-tight">22.7265<br/>75.8650</div>
-                <div className="w-3 h-3 rounded-full bg-orange-500 border-2 border-[#0f172a] shadow-lg mb-1"></div>
-                <span className="text-[10px] font-bold text-orange-500 tracking-wider">DEST</span>
-              </div>
+              {!position && !error && (
+                <div className="text-slate-400 font-mono text-sm animate-pulse">
+                  Acquiring GPS satellite fix...
+                </div>
+              )}
             </div>
 
-            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">Simulated Waypoints</h3>
+            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">Trip Information</h3>
             
             <div className="space-y-3">
-              {/* Waypoint 1 */}
+              {/* Start/Current */}
               <div className="bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 rounded-lg p-3 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <span className="w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-bold">1</span>
-                  <span className="font-mono text-sm font-bold text-slate-900 dark:text-white">22.7196, 75.8577</span>
+                  <span className="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs font-bold"><MapPin className="w-3 h-3" /></span>
+                  <span className="font-mono text-sm font-bold text-slate-900 dark:text-white">
+                    {position ? `${position.lat.toFixed(4)}, ${position.lng.toFixed(4)}` : 'Waiting...'}
+                  </span>
                 </div>
                 <div className="flex gap-2 items-center">
-                  <span className="text-xs font-medium text-blue-600 dark:text-blue-400">Start Point</span>
-                  <span className="bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300 text-[10px] font-bold px-2 py-0.5 rounded">START</span>
-                  <span className="bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400 border border-blue-200 dark:border-blue-800 text-[10px] font-bold px-2 py-0.5 rounded">CURRENT</span>
+                  <span className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded">YOUR LOCATION</span>
                 </div>
               </div>
 
-              {/* Waypoint 2 */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-lg p-3 flex items-center justify-between opacity-70">
-                <div className="flex items-center gap-3">
-                  <span className="w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 flex items-center justify-center text-xs font-bold">2</span>
-                  <span className="font-mono text-sm font-bold text-slate-900 dark:text-white">22.7205, 75.8590</span>
+              {trip && (
+                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-lg p-3 flex items-center justify-between opacity-90">
+                  <div className="flex items-center gap-3">
+                    <span className="w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 flex items-center justify-center text-xs font-bold">D</span>
+                    <div>
+                      <span className="font-mono text-sm font-bold text-slate-900 dark:text-white block">{trip.hospital?.name || 'Destination'}</span>
+                      <span className="text-xs text-slate-500">{trip.hospital?.address}</span>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    <span className="bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-500 text-[10px] font-bold px-2 py-0.5 rounded">DESTINATION</span>
+                  </div>
                 </div>
-                <span className="text-xs font-medium text-slate-400">En Route</span>
-              </div>
-
-              {/* Waypoint 3 */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-lg p-3 flex items-center justify-between opacity-70">
-                <div className="flex items-center gap-3">
-                  <span className="w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 flex items-center justify-center text-xs font-bold">3</span>
-                  <span className="font-mono text-sm font-bold text-slate-900 dark:text-white">22.7230, 75.8615</span>
-                </div>
-                <span className="text-xs font-medium text-slate-400">En Route</span>
-              </div>
-
-              {/* Waypoint 4 */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-lg p-3 flex items-center justify-between opacity-70">
-                <div className="flex items-center gap-3">
-                  <span className="w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 flex items-center justify-center text-xs font-bold">4</span>
-                  <span className="font-mono text-sm font-bold text-slate-900 dark:text-white">22.7265, 75.8650</span>
-                </div>
-                <div className="flex gap-2 items-center">
-                  <span className="text-xs font-medium text-slate-400">Near Destination</span>
-                  <span className="bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-500 text-[10px] font-bold px-2 py-0.5 rounded">DEST</span>
-                </div>
-              </div>
+              )}
             </div>
             
           </div>

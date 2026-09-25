@@ -1,109 +1,74 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Check, Star, X, MapPin, ArrowRight } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { getEmergency, getResourceMatch, assignEmergency } from '../api/client';
 
-const hospitals = [
-  {
-    id: 'h1',
-    name: 'City Care Hospital',
-    location: 'Vijay Nagar, Indore',
-    matchStatus: 'FULL MATCH',
-    availabilityStatus: 'AVAILABLE',
-    icuBeds: 8,
-    ventilators: 5,
-    doctors: 12,
-    emergencyDept: true,
-    totalBeds: 26,
-    updatedAgo: '2 min ago'
-  },
-  {
-    id: 'h2',
-    name: 'Metro General Hospital',
-    location: 'Palasia, Indore',
-    matchStatus: 'FULL MATCH',
-    availabilityStatus: 'AVAILABLE',
-    icuBeds: 4,
-    ventilators: 3,
-    doctors: 8,
-    emergencyDept: true,
-    totalBeds: 18,
-    updatedAgo: '5 min ago'
-  },
-  {
-    id: 'h3',
-    name: 'Apollo Emergency Center',
-    location: 'MG Road, Indore',
-    matchStatus: 'FULL MATCH',
-    availabilityStatus: 'BUSY',
-    icuBeds: 2,
-    ventilators: 1,
-    doctors: 5,
-    emergencyDept: true,
-    totalBeds: 9,
-    updatedAgo: '1 min ago'
-  },
-  {
-    id: 'h4',
-    name: 'Cityline Medical',
-    location: 'Scheme 54, Indore',
-    matchStatus: 'FULL MATCH',
-    availabilityStatus: 'AVAILABLE',
-    icuBeds: 3,
-    ventilators: 2,
-    doctors: 6,
-    emergencyDept: false,
-    totalBeds: 14,
-    updatedAgo: '7 min ago'
-  },
-  {
-    id: 'h5',
-    name: 'Central Hospital',
-    location: 'AB Road, Indore',
-    matchStatus: 'PARTIAL MATCH',
-    availabilityStatus: 'AVAILABLE',
-    icuBeds: 6,
-    ventilators: 0,
-    doctors: 9,
-    emergencyDept: true,
-    totalBeds: 32,
-    updatedAgo: '3 min ago'
-  },
-  {
-    id: 'h6',
-    name: 'Sunrise Health Institute',
-    location: 'Race Course Rd, Indore',
-    matchStatus: 'PARTIAL MATCH',
-    availabilityStatus: 'FULL',
-    icuBeds: 0,
-    ventilators: 0,
-    doctors: 4,
-    emergencyDept: true,
-    totalBeds: 0,
-    updatedAgo: '4 min ago'
-  }
-];
+const getCoordinates = (locationName: string = '') => {
+  const loc = locationName.toLowerCase();
+  if (loc.includes('bholaram')) return { lat: 22.695, lng: 75.865 };
+  if (loc.includes('choithram')) return { lat: 22.685, lng: 75.855 };
+  if (loc.includes('bombay')) return { lat: 22.755, lng: 75.905 };
+  if (loc.includes('apollo')) return { lat: 22.735, lng: 75.885 };
+  return { lat: 22.7196, lng: 75.8577 }; // Default Indore
+};
 
-const ambulances = [
-  { id: 'A-001', driver: 'Rajesh Kumar', status: 'AVAILABLE', lat: 22.7196, lng: 75.8577, updatedAgo: '30 sec ago' },
-  { id: 'A-002', driver: 'Sunil Sharma', status: 'BUSY', lat: 22.7254, lng: 75.8812, updatedAgo: '1 min ago' },
-  { id: 'A-003', driver: 'Vikas Patel', status: 'BUSY', lat: 22.7089, lng: 75.8695, updatedAgo: '45 sec ago' },
-  { id: 'A-004', driver: 'Anand Verma', status: 'AVAILABLE', lat: 22.7312, lng: 75.8441, updatedAgo: '20 sec ago' },
-  { id: 'A-005', driver: 'Mohit Singh', status: 'AVAILABLE', lat: 22.7178, lng: 75.8928, updatedAgo: '1 min ago' },
-  { id: 'A-006', driver: 'Deepak Joshi', status: 'AVAILABLE', lat: 22.7401, lng: 75.8763, updatedAgo: '2 min ago' },
-  { id: 'A-007', driver: 'Ravi Yadav', status: 'BUSY', lat: 22.7033, lng: 75.8501, updatedAgo: '30 sec ago' }
-];
+const getDistance = (loc1: {lat: number, lng: number}, loc2: {lat: number, lng: number}) => {
+  return Math.sqrt(Math.pow(loc1.lat - loc2.lat, 2) + Math.pow(loc1.lng - loc2.lng, 2));
+};
 
 export default function ResourceMatching() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const emergencyId = searchParams.get('id');
+
+  const { data: emergency } = useQuery({
+    queryKey: ['emergency', emergencyId],
+    queryFn: () => getEmergency(emergencyId as string),
+    enabled: !!emergencyId
+  });
+
+  const { data: matchData } = useQuery({
+    queryKey: ['match', emergencyId],
+    queryFn: () => getResourceMatch(emergencyId as string),
+    enabled: !!emergencyId
+  });
+
   const [selectedHospitalId, setSelectedHospitalId] = useState<string | null>(null);
   const [selectedAmbulanceId, setSelectedAmbulanceId] = useState<string | null>(null);
   const [step, setStep] = useState<1 | 2>(1);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const selectedHospital = hospitals.find(h => h.id === selectedHospitalId);
-  const selectedAmbulance = ambulances.find(a => a.id === selectedAmbulanceId);
+  const hospitals = matchData?.hospitals || [];
+  const ambulances = matchData?.ambulances || [];
 
-  const handleConfirm = () => {
-    navigate('/assignments');
+  const sortedHospitals = [...hospitals].sort((a: any, b: any) => {
+    const d1 = getDistance(getCoordinates(emergency?.location), getCoordinates(a.name));
+    const d2 = getDistance(getCoordinates(emergency?.location), getCoordinates(b.name));
+    return d1 - d2;
+  });
+
+  const recommendedHospital = sortedHospitals.find((h: any) => h.suitable) || sortedHospitals[0];
+  const recommendedAmbulance = ambulances.find((a: any) => a.status.toUpperCase() === 'AVAILABLE') || ambulances[0];
+
+  const selectedHospital = hospitals.find((h: any) => h.id === selectedHospitalId);
+  const selectedAmbulance = ambulances.find((a: any) => a.id === selectedAmbulanceId);
+
+  const handleConfirm = async () => {
+    if (!emergencyId || !selectedHospitalId || !selectedAmbulanceId || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      await assignEmergency(emergencyId, {
+        hospitalId: selectedHospitalId,
+        ambulanceId: selectedAmbulanceId
+      });
+      navigate('/assignments');
+    } catch (err) {
+      console.error(err);
+      alert('Failed to assign emergency');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (step === 2 && selectedHospital && selectedAmbulance) {
@@ -122,8 +87,8 @@ export default function ResourceMatching() {
           <div className="p-6 border-b border-slate-200 dark:border-slate-800">
             <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-4">Emergency Request</h3>
             <div className="flex items-center gap-3 mb-2">
-              <span className="text-lg font-bold text-slate-900 dark:text-white">ER-1025</span>
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">CRITICAL</span>
+              <span className="text-lg font-bold text-slate-900 dark:text-white">{emergency?.requestCode || 'ER-...'}</span>
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">{emergency?.priority || 'CRITICAL'}</span>
             </div>
             <p className="text-sm text-slate-600 dark:text-slate-300 mb-1">Road Accident • Indore, Madhya Pradesh</p>
             <p className="text-sm text-slate-500 mb-3">Patient: P-501</p>
@@ -168,7 +133,7 @@ export default function ResourceMatching() {
             <div className="flex justify-between items-start">
               <div>
                 <h3 className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-2">Selected Ambulance</h3>
-                <h4 className="text-base font-bold text-slate-900 dark:text-white">{selectedAmbulance.id}</h4>
+                <h4 className="text-base font-bold text-slate-900 dark:text-white">{selectedAmbulance.vehicleNo || selectedAmbulance.id}</h4>
                 <p className="text-sm text-slate-500 mb-3">Driver: {selectedAmbulance.driver}</p>
                 <div className="inline-block bg-emerald-100/50 dark:bg-emerald-900/30 rounded p-1.5">
                   <div className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider mb-0.5">Simulated Location</div>
@@ -189,10 +154,10 @@ export default function ResourceMatching() {
           <h3 className="text-[10px] font-bold text-yellow-700 dark:text-yellow-500 uppercase tracking-wider mb-3">Expected Status Changes</h3>
           <div className="grid grid-cols-2 gap-4">
             <div className="text-sm text-slate-700 dark:text-slate-300">
-              Emergency ER-1025: <span className="font-bold">PENDING → ASSIGNED</span>
+              Emergency {emergency?.requestCode || 'ER-...'}: <span className="font-bold">PENDING → ASSIGNED</span>
             </div>
             <div className="text-sm text-slate-700 dark:text-slate-300">
-              Ambulance {selectedAmbulance.id}: <span className="font-bold">AVAILABLE → BUSY</span>
+              Ambulance {selectedAmbulance.vehicleNo || selectedAmbulance.id}: <span className="font-bold">AVAILABLE → BUSY</span>
             </div>
           </div>
         </div>
@@ -201,8 +166,12 @@ export default function ResourceMatching() {
           <button onClick={() => setStep(1)} className="px-6 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
             Cancel
           </button>
-          <button onClick={handleConfirm} className="px-6 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold transition-colors">
-            Confirm Assignment
+          <button 
+            onClick={handleConfirm} 
+            disabled={isSubmitting}
+            className={`px-6 py-2.5 rounded-lg font-bold transition-colors ${isSubmitting ? 'bg-blue-400 text-white cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
+          >
+            {isSubmitting ? 'Assigning...' : 'Confirm Assignment'}
           </button>
         </div>
       </div>
@@ -217,8 +186,8 @@ export default function ResourceMatching() {
           <ArrowLeft className="w-5 h-5" />
         </button>
         <h1 className="text-xl font-bold text-slate-900 dark:text-white">Resource Matching</h1>
-        <span className="text-sm font-medium text-slate-500">ER-1025</span>
-        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">CRITICAL</span>
+        <span className="text-sm font-medium text-slate-500">{emergency?.requestCode || 'ER-...'}</span>
+        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">{emergency?.priority || 'CRITICAL'}</span>
       </div>
       
       <div className="ml-9 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-600 dark:text-slate-400">
@@ -247,34 +216,36 @@ export default function ResourceMatching() {
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-white dark:bg-slate-900 rounded-lg p-4 border border-blue-100 dark:border-blue-800/50 shadow-sm">
-            <div className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-2">Hospital</div>
-            <div className="font-bold text-slate-900 dark:text-white mb-3">City Care Hospital</div>
-            <div className="space-y-1.5 text-sm text-emerald-700 dark:text-emerald-400">
-              <div className="flex items-center gap-2"><Check className="w-3.5 h-3.5" /> ICU available (8)</div>
-              <div className="flex items-center gap-2"><Check className="w-3.5 h-3.5" /> Ventilator available (5)</div>
-              <div className="flex items-center gap-2"><Check className="w-3.5 h-3.5" /> Emergency doctor available</div>
-              <div className="flex items-center gap-2"><Check className="w-3.5 h-3.5" /> Emergency department active</div>
+          {recommendedHospital && (
+            <div className="bg-white dark:bg-slate-900 rounded-lg p-4 border border-blue-100 dark:border-blue-800/50 shadow-sm">
+              <div className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-2">Nearest Suitable Hospital</div>
+              <div className="font-bold text-slate-900 dark:text-white mb-3">{recommendedHospital.name}</div>
+              <div className="space-y-1.5 text-sm text-emerald-700 dark:text-emerald-400">
+                {recommendedHospital.availableIcu > 0 && <div className="flex items-center gap-2"><Check className="w-3.5 h-3.5" /> ICU available ({recommendedHospital.availableIcu})</div>}
+                {recommendedHospital.availableVentilators > 0 && <div className="flex items-center gap-2"><Check className="w-3.5 h-3.5" /> Ventilators available ({recommendedHospital.availableVentilators})</div>}
+                <div className="flex items-center gap-2"><Check className="w-3.5 h-3.5" /> Emergency department active</div>
+              </div>
             </div>
-          </div>
-          <div className="bg-white dark:bg-slate-900 rounded-lg p-4 border border-blue-100 dark:border-blue-800/50 shadow-sm">
-            <div className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-2">Ambulance</div>
-            <div className="font-bold text-slate-900 dark:text-white mb-3">A-001</div>
-            <div className="space-y-1.5 text-sm text-emerald-700 dark:text-emerald-400">
-              <div className="flex items-center gap-2"><Check className="w-3.5 h-3.5" /> Status: Available</div>
-              <div className="flex items-center gap-2"><Check className="w-3.5 h-3.5" /> Simulated location available</div>
-              <div className="flex items-center gap-2"><Check className="w-3.5 h-3.5" /> Not assigned to another emergency</div>
+          )}
+          {recommendedAmbulance && (
+            <div className="bg-white dark:bg-slate-900 rounded-lg p-4 border border-blue-100 dark:border-blue-800/50 shadow-sm">
+              <div className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-2">Nearest Available Ambulance</div>
+              <div className="font-bold text-slate-900 dark:text-white mb-3">{recommendedAmbulance.vehicleNo}</div>
+              <div className="space-y-1.5 text-sm text-emerald-700 dark:text-emerald-400">
+                <div className="flex items-center gap-2"><Check className="w-3.5 h-3.5" /> Status: {recommendedAmbulance.status}</div>
+                <div className="flex items-center gap-2"><Check className="w-3.5 h-3.5" /> Type: {recommendedAmbulance.type}</div>
+              </div>
+              <div className="mt-3 text-[10px] text-slate-400 font-mono">
+                Simulated: {recommendedAmbulance.lat || 22.7196}, {recommendedAmbulance.lng || 75.8577}
+              </div>
             </div>
-            <div className="mt-3 text-[10px] text-slate-400 font-mono">
-              Simulated: 22.7196, 75.8577
-            </div>
-          </div>
+          )}
         </div>
         <div className="mt-5">
           <button 
             onClick={() => {
-              setSelectedHospitalId('h1');
-              setSelectedAmbulanceId('A-001');
+              if (recommendedHospital) setSelectedHospitalId(recommendedHospital.id);
+              if (recommendedAmbulance) setSelectedAmbulanceId(recommendedAmbulance.id);
             }}
             className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold px-5 py-2.5 rounded-lg transition-colors"
           >
@@ -384,7 +355,7 @@ export default function ResourceMatching() {
           <div className="space-y-3">
             {ambulances.map(a => {
               const isSelected = selectedAmbulanceId === a.id;
-              const isAvailable = a.status === 'AVAILABLE';
+              const isAvailable = a.status?.toUpperCase() === 'AVAILABLE';
 
               return (
                 <div 
@@ -393,7 +364,7 @@ export default function ResourceMatching() {
                 >
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex items-center gap-2">
-                      <h3 className="font-bold text-slate-900 dark:text-white">{a.id}</h3>
+                      <h3 className="font-bold text-slate-900 dark:text-white">{a.vehicleNo || a.id}</h3>
                       {isSelected && (
                         <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-600 text-white flex items-center gap-1">
                           <Check className="w-3 h-3" /> SELECTED
@@ -457,7 +428,7 @@ export default function ResourceMatching() {
                 <div className={`w-1.5 h-1.5 rounded-full ${selectedAmbulance ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`}></div>
                 Ambulance: 
                 <span className={`font-bold ${selectedAmbulance ? 'text-slate-900 dark:text-white' : 'text-slate-400'}`}>
-                  {selectedAmbulance ? selectedAmbulance.id : 'Not selected'}
+                  {selectedAmbulance ? (selectedAmbulance.vehicleNo || selectedAmbulance.id) : 'Not selected'}
                 </span>
               </span>
             </div>

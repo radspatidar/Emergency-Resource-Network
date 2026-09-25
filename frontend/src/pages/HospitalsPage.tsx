@@ -3,6 +3,7 @@ import { Search, Plus, Eye, Edit2, Trash2, X, Filter, ChevronDown, Phone } from 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getHospitals, createHospital, updateHospital, deleteHospital } from '../api/client';
 import clsx from 'clsx';
+import { ModalPortal } from '../components/ModalPortal';
 
 type Hospital = {
   id: string;
@@ -243,6 +244,7 @@ export default function HospitalsPage() {
 
       {/* REGISTER MODAL */}
       {isRegisterOpen && (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className="bg-white dark:bg-[#131b2e] w-full max-w-2xl rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700/80 overflow-hidden flex flex-col max-h-[90vh]">
             <div className="flex justify-between items-start p-6 border-b border-gray-200 dark:border-slate-700/80 flex-shrink-0">
@@ -262,10 +264,12 @@ export default function HospitalsPage() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* VIEW MODAL */}
       {viewHospital && (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className="bg-white dark:bg-[#131b2e] w-full max-w-lg rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700/80 overflow-hidden">
             <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-slate-700/80">
@@ -301,10 +305,12 @@ export default function HospitalsPage() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* EDIT MODAL */}
       {editHospital && (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className="bg-white dark:bg-[#131b2e] w-full max-w-2xl rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700/80 overflow-hidden flex flex-col max-h-[90vh]">
             <div className="flex justify-between items-start p-6 border-b border-gray-200 dark:border-slate-700/80 flex-shrink-0">
@@ -324,10 +330,12 @@ export default function HospitalsPage() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* DELETE MODAL */}
       {deleteTarget && (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className="bg-white dark:bg-[#131b2e] w-full max-w-sm rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700/80 p-6">
             <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Delete Hospital</h3>
@@ -343,6 +351,7 @@ export default function HospitalsPage() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
     </div>
   );

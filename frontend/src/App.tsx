@@ -18,6 +18,7 @@ import Resources from './pages/Resources';
 import EmergencyStatus from './pages/EmergencyStatus';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
+import LandingPage from './pages/LandingPage';
 import EmergencyRequestsPage from './pages/EmergencyRequestsPage';
 import CreateEmergency from './pages/CreateEmergency';
 import ResourceMatching from './pages/ResourceMatching';
@@ -44,12 +45,12 @@ export default function App() {
       <ThemeProvider>
         <BrowserRouter>
           <Routes>
-            {/* Login is the landing page */}
+            <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<Login />} />
 
             {/* Protected routes */}
-            <Route path="/" element={<AuthGuard><Layout /></AuthGuard>}>
-              <Route index element={<Dashboard />} />
+            <Route element={<AuthGuard><Layout /></AuthGuard>}>
+              <Route path="/dashboard" element={<Dashboard />} />
               <Route path="users" element={<UsersPage />} />
               <Route path="hospitals" element={<HospitalsPage />} />
               <Route path="ambulances" element={<AmbulancesPage />} />

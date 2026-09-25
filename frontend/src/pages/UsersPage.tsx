@@ -3,6 +3,7 @@ import { Search, Plus, Eye, Edit2, Trash2, ChevronDown, ChevronLeft, ChevronRigh
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getUsers, createUser, updateUser, deleteUser } from '../api/client';
 import clsx from 'clsx';
+import { ModalPortal } from '../components/ModalPortal';
 
 type User = {
   id: string;
@@ -219,6 +220,7 @@ export default function UsersPage() {
 
       {/* CREATE MODAL */}
       {isCreateOpen && (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className="bg-white dark:bg-[#131b2e] w-full max-w-2xl rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700/80 overflow-hidden flex flex-col">
             <div className="flex justify-between items-start p-6 border-b border-gray-200 dark:border-slate-700/80">
@@ -278,10 +280,12 @@ export default function UsersPage() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* VIEW MODAL */}
       {viewUser && (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className="bg-white dark:bg-[#131b2e] w-full max-w-lg rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700/80 overflow-hidden">
             <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-slate-700/80">
@@ -319,10 +323,12 @@ export default function UsersPage() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* EDIT MODAL */}
       {editUser && (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className="bg-white dark:bg-[#131b2e] w-full max-w-2xl rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700/80 overflow-hidden flex flex-col">
             <div className="flex justify-between items-start p-6 border-b border-gray-200 dark:border-slate-700/80">
@@ -372,10 +378,12 @@ export default function UsersPage() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* DELETE CONFIRM MODAL */}
       {deleteTarget && (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className="bg-white dark:bg-[#131b2e] w-full max-w-sm rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700/80 p-6">
             <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Delete User</h3>
@@ -394,6 +402,7 @@ export default function UsersPage() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
     </div>
   );
