@@ -7,52 +7,106 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+
 model User {
   id        String   @id @default(uuid())
   name      String
   email     String   @unique
   password  String
-  role      String   // e.g., "System Admin", "Hospital Admin", "Dispatch"
+  role      String   // "System Admin", "Hospital Admin", "Emergency Coordinator", "Ambulance Operator"
   phone     String?
   status    String   @default("Active") // "Active", "Inactive"
-  hospital  String?  // Reference to a hospital name or ID if applicable
+  hospital  String?  // legacy field kept for backward compat
+  hospitalId String? // FK reference to Hospital
+  ambulanceId String? // FK reference to Ambulance
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model Hospital {
-  id           String   @id @default(uuid())
-  name         String
-  city         String
-  type         String   // e.g., "Trauma Center", "General Hospital"
-  totalBeds    Int
-  availableBeds Int
-  icuBeds      Int
-  availableIcu Int
-  status       String   // "Active", "Critical", "At Capacity"
-  contact      String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id              String   @id @default(uuid())
+  name            String
+  city            String
+  type            String   // "Trauma Center", "General Hospital", etc.
+  totalBeds       Int      @default(0)
+  availableBeds   Int      @default(0)
+  icuBeds         Int      @default(0)
+  availableIcu    Int      @default(0)
+  ventilators     Int      @default(0)
+  availableVentilators Int @default(0)
+  oxygenUnits     Int      @default(0)
+  availableOxygen Int      @default(0)
+  doctorsAvailable Int     @default(0)
+  nursesAvailable  Int     @default(0)
+  emergencyStatus  String  @default("AVAILABLE") // "AVAILABLE", "BUSY", "FULL"
+  status          String   @default("Active")    // "Active", "Inactive"
+  contact         String?
+  address         String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 model Ambulance {
   id          String   @id @default(uuid())
   vehicleNo   String   @unique
-  type        String   // e.g., "Advanced Life Support", "Basic Life Support"
-  status      String   // "Available", "Busy", "Out of Service"
-  location    String   // e.g., "Downtown Station", "En route"
+  type        String   // "Advanced Life Support", "Basic Life Support"
+  status      String   @default("Available") // "Available", "Busy", "Out of Service"
+  lat         Float    @default(22.7196)
+  lng         Float    @default(75.8577)
+  locationLabel String @default("Base Station")
   driverName  String?
   contact     String?
-  hospital    String?  // Currently assigned hospital
+  hospitalId  String?  // Currently assigned hospital
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  trips       Trip[]
+}
+
+model EmergencyRequest {
+  id              String   @id @default(uuid())
+  requestCode     String   @unique // e.g. ER-001
+  patientId       String   // e.g. P-101
+  emergencyType   String   // "Medical Emergency", "Road Accident", etc.
+  location        String   // pickup location description
+  priority        String   // "Critical", "High", "Medium"
+  requiredResources String[] // ["ICU", "Ventilator", "Emergency Doctor"]
+  status          String   @default("Pending") // "Pending", "Assigned", "Accepted", "In Progress", "Completed"
+  notes           String?
+  createdBy       String   // coordinatorId or name
+  hospitalId      String?  // assigned hospital
+  ambulanceId     String?  // assigned ambulance
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  trip            Trip?
+}
+
+model Trip {
+  id              String   @id @default(uuid())
+  tripCode        String   @unique // e.g. TRIP-001
+  emergencyId     String   @unique
+  ambulanceId     String
+  status          String   @default("Not Started") // "Not Started","In Progress","Completed"
+  acceptedAt      DateTime?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  currentLat      Float    @default(22.7196)
+  currentLng      Float    @default(75.8577)
+  waypointIndex   Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  emergency       EmergencyRequest @relation(fields: [emergencyId], references: [id])
+  ambulance       Ambulance @relation(fields: [ambulanceId], references: [id])
 }
 
 model ActivityLog {
   id          String   @id @default(uuid())
-  action      String   // e.g., "User Created", "Hospital Updated"
-  module      String   // "Users", "Hospitals", "Ambulances", "System"
+  action      String
+  module      String   // "Users","Hospitals","Ambulances","Emergency","System"
   description String
-  user        String   // Name or ID of user who performed it
+  user        String
+  refId       String?  // optional reference ID (e.g. emergency ID)
   timestamp   DateTime @default(now())
 }
