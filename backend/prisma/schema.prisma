@@ -1,0 +1,58 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   // e.g., "System Admin", "Hospital Admin", "Dispatch"
+  phone     String?
+  status    String   @default("Active") // "Active", "Inactive"
+  hospital  String?  // Reference to a hospital name or ID if applicable
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Hospital {
+  id           String   @id @default(uuid())
+  name         String
+  city         String
+  type         String   // e.g., "Trauma Center", "General Hospital"
+  totalBeds    Int
+  availableBeds Int
+  icuBeds      Int
+  availableIcu Int
+  status       String   // "Active", "Critical", "At Capacity"
+  contact      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Ambulance {
+  id          String   @id @default(uuid())
+  vehicleNo   String   @unique
+  type        String   // e.g., "Advanced Life Support", "Basic Life Support"
+  status      String   // "Available", "Busy", "Out of Service"
+  location    String   // e.g., "Downtown Station", "En route"
+  driverName  String?
+  contact     String?
+  hospital    String?  // Currently assigned hospital
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model ActivityLog {
+  id          String   @id @default(uuid())
+  action      String   // e.g., "User Created", "Hospital Updated"
+  module      String   // "Users", "Hospitals", "Ambulances", "System"
+  description String
+  user        String   // Name or ID of user who performed it
+  timestamp   DateTime @default(now())
+}
